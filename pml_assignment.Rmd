@@ -1,0 +1,91 @@
+---
+title: "PML assignment"
+author: "XU BIN"
+date: "Sunday, July 19, 2015"
+output: html_document
+---
+
+-------------------------------------------------------
+
+### Executive Summary
+  This assignment is a typical classification problem, since the output has 5 level, General linear model cannot handle this conveniently. So I choose **CART + Random forest/Boost** to solve this . the difficulty is that there are too many variables. if we remain all, the time-complexity is too high. so we need to choose the most valuable component to construct the training data set. At last, I choose 8 covariances to get to about **97%** accuracy.
+  
+-----------------------------------------------
+
+#### 1. Firstly import "caret" & "rpart" library then load the data file 
+
+```{r}
+library(caret)
+library(rpart)
+### setwd() set the correct working directory 
+dat <- read.csv("pml-training.csv")
+val <- read.csv("pml-testing.csv")
+```
+
+#### 2. Data cleaning and split the data into training set and testing set
+* Item 1: Remove NA column
+```{r}
+dat_cr <- dat[, complete.cases(t(dat))]
+```
+* Item 2: split the data into training set and testing set
+```{r}
+inTrain <- createDataPartition(y=dat_cr$classe, p=0.7, list=FALSE)
+training <- dat_cr[inTrain, ]
+testing <- dat_cr[-inTrain, ]
+```
+* Item 3: Remove useless rows from training set
+```{r}
+training <- training[, -c(1:7)] 
+training <- data.frame(Filter(is.numeric, training), classe=training$classe)
+```
+
+#### 3. exploratoray analysis
+We choose 4 total variances to see their relationship with classe
+```{r}
+qplot(total_accel_belt, total_accel_arm, colour=classe,data=training)
+qplot(total_accel_belt, total_accel_forearm,colour=classe,data=training)
+```
+We found there exist some relationship among total variances and classe and we need to find more
+
+#### 4. General CART
+```{r}
+set.seed(38125)
+model_cart <- train(classe ~ ., method="rpart", data=training) 
+pre <- predict(model_cart, testing)
+confusionMatrix(pre, testing$classe)
+```
+The accuracy is about .5 and we need to find the most powerful component that influence the result, so
+```{r}
+model_cart$finalModel
+```
+We found roll_belt, pitch_forearm, magnet_dumbbell_y and roll_forearm is the top 4
+
+### 5. Random Forest
+```{r}
+training_2 <- training[, c("roll_belt", "pitch_forearm", "magnet_dumbbell_y", "roll_forearm", "classe")]
+model_rf1 <- train(classe ~., method="rf", data=training_2, ntree=50)
+pre_rf1 <- predict(model_rf1, testing)
+confusionMatrix(pre_rf1, testing$classe)
+```
+We get the accuracy is .91, it's much better than CART, but we need to see whether it still can be improved,so we add more covariances into it.
+```{r}
+training_3 <- training[, c("roll_belt", "pitch_forearm", "magnet_dumbbell_y", "roll_forearm","total_accel_belt", "total_accel_arm", "total_accel_dumbbell", "total_accel_forearm", "classe")]
+model_rf2 <- train(classe ~., method="rf", data=training_3, ntree=50)
+pre_rf2 <- predict(model_rf2, testing)
+confusionMatrix(pre_rf2, testing$classe)
+```
+The last result is about .963. And we can use model_rf1 and model_rf2 to predict the validation set
+```{r}
+pre_val_rf1 <- predict(model_rf1, val)
+pre_val_rf2 <- predict(model_rf2, val)
+result <- data.frame(pre_val_rf1, pre_val_rf2)
+result
+```
+So we can most of them are the same and it's logical.
+
+
+
+
+
+
+
